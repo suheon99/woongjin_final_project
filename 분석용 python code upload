@@ -1,0 +1,145 @@
+# 1️⃣ 트래픽 구조 및 캠페인별 유입 특성
+
+import matplotlib.pyplot as plt
+
+# 한글 폰트 깨짐 방지 (맥용)
+plt.rcParams['font.family'] = 'AppleGothic'
+plt.rcParams['axes.unicode_minus'] = False
+
+# 캠페인별 utm_source 분포
+fig, ax = plt.subplots(1, 2, figsize=(14, 6))
+
+summary['utm_source'].T.plot(
+    kind='bar',
+    stacked=True,
+    ax=ax[0],
+    colormap='tab20'
+)
+ax[0].set_title('캠페인별 UTM Source 분포 (%)')
+ax[0].set_ylabel('비율(%)')
+ax[0].set_xlabel('UTM Source')
+ax[0].legend(title='Campaign', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+# 캠페인별 utm_medium 분포
+summary['utm_medium'].T.plot(
+    kind='bar',
+    stacked=True,
+    ax=ax[1],
+    color=['#6baed6', '#9ecae1', '#c6dbef']
+)
+ax[1].set_title('캠페인별 UTM Medium 분포 (%)')
+ax[1].set_ylabel('비율(%)')
+ax[1].set_xlabel('UTM Medium')
+ax[1].legend(title='Campaign', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+plt.tight_layout()
+plt.show()
+
+------------------------------------------------------------      
+
+# 2️⃣ 유입 시점 패턴 분석
+
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# 한글 폰트 깨짐 방지
+plt.rcParams['font.family'] = 'AppleGothic'
+plt.rcParams['axes.unicode_minus'] = False
+
+# CSV 불러오기
+df = pd.read_csv("visitlogs_final.csv")
+
+# visited_at → datetime으로 변환
+df['visited_at'] = pd.to_datetime(df['visited_at'], errors='coerce')
+
+# 요일/시간 컬럼 추가
+df['weekday'] = df['visited_at'].dt.day_name()   # Monday, Tuesday ...
+df['hour'] = df['visited_at'].dt.hour
+
+# 요일 순서 정렬용
+weekday_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+df['weekday'] = pd.Categorical(df['weekday'], categories=weekday_order, ordered=True)
+
+# 캠페인 결측 처리
+df['utm_campaign'] = df['utm_campaign'].fillna('unknown')
+
+# ✅ 1️⃣ 요일별 캠페인 방문량
+weekday_pivot = (
+    df.groupby(['weekday', 'utm_campaign'])
+    .size()
+    .unstack(fill_value=0)
+)
+
+weekday_pivot.plot(kind='bar', figsize=(10,6))
+plt.title("캠페인별 요일별 방문량")
+plt.ylabel("방문 수")
+plt.xlabel("요일")
+plt.legend(title="캠페인")
+plt.tight_layout()
+plt.show()
+
+
+# ✅ 2️⃣ 시간대별 캠페인 방문량
+hour_pivot = (
+    df.groupby(['hour', 'utm_campaign'])
+    .size()
+    .unstack(fill_value=0)
+)
+
+hour_pivot.plot(kind='line', figsize=(10,6), marker='o')
+plt.title("캠페인별 시간대별 방문 추이")
+plt.ylabel("방문 수")
+plt.xlabel("시간대 (0~23시)")
+plt.legend(title="캠페인")
+plt.tight_layout()
+plt.show()
+
+------------------------------------------------------------      
+# 3️⃣ 캠페인별 유입 효율 매트릭스
+
+import pandas as pd
+
+# CSV 불러오기
+df = pd.read_csv("visitlogs_final.csv")
+
+# 결측 처리
+df['utm_campaign'] = df['utm_campaign'].fillna('unknown')
+df['utm_source'] = df['utm_source'].fillna('unknown')
+df['device_family'] = df['device_family'].fillna('unknown')
+
+# ✅ 1️⃣ 캠페인별 세션수
+session_count = df.groupby('utm_campaign').size().rename('sessions')
+
+# ✅ 2️⃣ 모바일 비중
+mobile_ratio = (
+    df.groupby('utm_campaign')['device_family']
+    .apply(lambda x: (x.str.lower() == 'mobile').mean() * 100)
+    .rename('mobile_ratio')
+)
+
+# ✅ 3️⃣ direct 비중
+direct_ratio = (
+    df.groupby('utm_campaign')['utm_source']
+    .apply(lambda x: (x.str.lower() == 'direct').mean() * 100)
+    .rename('direct_ratio')
+)
+
+# ✅ 4️⃣ 주요 채널 (상위 2개 source)
+top_sources = (
+    df.groupby(['utm_campaign', 'utm_source'])
+    .size()
+    .groupby(level=0)
+    .apply(lambda x: ', '.join(x.nlargest(2).index.get_level_values(1)))
+    .rename('top_sources')
+)
+
+# ✅ 통합 매트릭스 생성
+summary = pd.concat([session_count, mobile_ratio, direct_ratio, top_sources], axis=1).reset_index()
+
+# 소수점 정리
+summary['mobile_ratio'] = summary['mobile_ratio'].round(1)
+summary['direct_ratio'] = summary['direct_ratio'].round(1)
+
+print("📊 캠페인별 유입 효율 매트릭스\n")
+print(summary)
+
