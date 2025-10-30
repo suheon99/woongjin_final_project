@@ -1,0 +1,71 @@
+<mxfile host="app.diagrams.net" modified="2025-10-30T09:00:00Z" agent="5.0 (Mac)" version="22.0.8" editor="draw.io">
+  <diagram name="AWS Serverless VisitLog Data Pipeline">
+    <mxGraphModel dx="1580" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- CloudShell -->
+        <mxCell id="cloudshell" value="CloudShell (Setup Script)" style="shape=process;rounded=1;fillColor=#F2C744;strokeColor=#B08500;fontStyle=1;fontSize=14;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="160" y="80" width="160" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- EventBridge -->
+        <mxCell id="eventbridge" value="EventBridge" style="shape=hexagon;perimeter=hexagonPerimeter2;fillColor=#C77CF0;strokeColor=#7B32C0;fontColor=#fff;fontStyle=1;fontSize=14;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="160" y="200" width="160" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Lambda -->
+        <mxCell id="lambda" value="Lambda" style="shape=mxgraph.aws3.lambda_function;fillColor=#F2B67A;gradientColor=none;strokeColor=#C97A0A;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="380" y="200" width="140" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- S3 -->
+        <mxCell id="s3" value="S3 (VisitLog Storage)" style="shape=mxgraph.aws3.s3;fillColor=#9AD97A;strokeColor=#3A7F0B;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="620" y="120" width="160" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- CloudWatch -->
+        <mxCell id="cloudwatch" value="CloudWatch" style="shape=mxgraph.aws3.cloudwatch;fillColor=#F27BAA;strokeColor=#B04B75;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="620" y="220" width="160" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Slack -->
+        <mxCell id="slack" value="Slack" style="shape=image;image=https://upload.wikimedia.org/wikipedia/commons/7/76/Slack_Icon.png;imageAspect=1;" vertex="1" parent="1">
+          <mxGeometry x="620" y="320" width="160" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- CloudShell → EventBridge -->
+        <mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=block;strokeColor=#333;" edge="1" parent="1" source="cloudshell" target="eventbridge">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- EventBridge → Lambda -->
+        <mxCell id="edge2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=block;strokeColor=#333;" edge="1" parent="1" source="eventbridge" target="lambda">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Lambda → S3 -->
+        <mxCell id="edge3" value="Upload VisitLog JSON" style="edgeStyle=elbowEdgeStyle;endArrow=block;strokeColor=#333;fontSize=11;labelBackgroundColor=#fff;" edge="1" parent="1" source="lambda" target="s3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Lambda → CloudWatch -->
+        <mxCell id="edge4" value="Send Logs" style="edgeStyle=elbowEdgeStyle;endArrow=block;strokeColor=#333;fontSize=11;labelBackgroundColor=#fff;" edge="1" parent="1" source="lambda" target="cloudwatch">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Lambda → Slack -->
+        <mxCell id="edge5" value="Send Notification" style="edgeStyle=elbowEdgeStyle;endArrow=block;strokeColor=#333;fontSize=11;labelBackgroundColor=#fff;" edge="1" parent="1" source="lambda" target="slack">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- CloudWatch → S3 (logs export) -->
+        <mxCell id="edge6" value="Export Logs" style="edgeStyle=elbowEdgeStyle;dashed=1;endArrow=open;strokeColor=#999;fontSize=11;labelBackgroundColor=#fff;" edge="1" parent="1" source="cloudwatch" target="s3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
