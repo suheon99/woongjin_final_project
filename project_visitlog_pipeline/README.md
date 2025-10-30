@@ -62,47 +62,152 @@ def lambda_handler(event, context):
 
 ---
 
-##  실행 및 스케줄링
-- **EventBridge Scheduler**를 통해 날짜별 Lambda 호출 자동화  
-- **3분 간격 순차 실행**으로 API 부하 제어  
-- **공휴일 병합 규칙** 설정으로 비효율적인 실행 최소화  
-- **CloudWatch Logs**에서 각 실행 결과 모니터링 가능  
+##  배포 및 운영
+
+###  Lambda 함수 생성 및 환경 변수 설정
+
+Lambda 콘솔에서 함수 생성 후,  
+아래와 같이 **환경 변수(Environment Variables)** 를 등록합니다.
+
+| 키 | 설명 |
+|----|------|
+| `S3_BUCKET_NAME` | 수집 데이터를 저장할 S3 버킷명 |
+| `SLACK_WEBHOOK_URL` | Slack Webhook URL |
+| `VISITLOG_API_KEY` | VisitLog API 인증 키 |
+
+**권한 설정**  
+- Lambda 상단 메뉴 → [구성] → [권한] → [실행 역할] → 인라인 정책 추가  
+- 아래 JSON 정책을 붙여넣습니다.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:PutObjectAcl"],
+      "Resource": "arn:aws:s3:::your-bucket-name/visitlog/*"
+    }
+  ]
+}
+```
 
 ---
 
-##  시스템 장점
+###  CloudShell에서 EventBridge 스케줄 생성
+
+아래 스크립트는 **10월 1일~22일 기간** 동안  
+3분 간격으로 순차 실행되도록 **EventBridge 규칙**을 생성합니다.
+
+```bash
+# 환경 변수 설정
+LAMBDA_ARN="arn:aws:lambda:ap-northeast-2:180528248114:function:get_visitlogapi"
+RULE_NAME="run_seq_dau_20251028_0940"
+TARGET_ID="lambda-target-0940"
+
+# UTC 00:40 = KST 09:40
+SCHEDULE="cron(40 0 28 10 ? 2025)"
+
+# EventBridge 규칙 생성
+aws events put-rule \
+  --name "$RULE_NAME" \
+  --schedule-expression "$SCHEDULE" \
+  --state ENABLED \
+  --description "Run sequential DAU (Oct 1–22) 3min interval"
+
+# Lambda 실행 권한 부여
+aws lambda add-permission \
+  --function-name "$LAMBDA_ARN" \
+  --statement-id "AllowExecutionFromEventBridgeOnce0940" \
+  --action "lambda:InvokeFunction" \
+  --principal events.amazonaws.com \
+  --source-arn "arn:aws:events:ap-northeast-2:180528248114:rule/$RULE_NAME"
+
+# Lambda 실행 인자 설정 (주말 및 공휴일 병합 규칙 포함)
+aws events put-targets \
+  --rule "$RULE_NAME" \
+  --targets '[{"Id":"'"$TARGET_ID"'","Arn":"'"$LAMBDA_ARN"'","Input":"{\"start_date\": \"2025-10-01\", \"end_date\": \"2025-10-22\", \"interval_minutes\": 3, \"merge_rules\": {\"2025-10-03_to_2025-10-09\": \"2025-10-10\", \"2025-10-10_to_2025-10-12\": \"2025-10-13\", \"2025-10-17_to_2025-10-19\": \"2025-10-20\"}}"}]'
+```
+
+**핵심 포인트**
+- 3분 간격 순차 실행으로 API 부하 방지  
+- 공휴일 데이터는 평일에 병합 수집  
+- 모든 규칙은 `EventBridge 콘솔`에서 확인 가능  
+
+---
+
+###  Slack 알림으로 결과 수신
+
+Lambda 실행이 완료되면 Slack으로 자동 알림이 전송됩니다.
+
+```
+✅ VisitLog 2025-10-10 수집 완료
+총 3,842건
+S3 저장 경로: s3://project-visitlogapi/visitlog/date=2025-10-10/visitlog_2025-10-10.json
+```
+
+실패 시:
+```
+❌ VisitLog 2025-10-11 수집 실패
+에러: HTTPError 403: Forbidden
+```
+
+| 항목 | 설명 |
+|------|------|
+| ✅ / ❌ | 성공 여부 |
+| 날짜 | 수집 대상 일자 |
+| 총 건수 | VisitLog API 수집 데이터 수 |
+| S3 경로 | 업로드 완료된 파일 위치 |
+
+
+**Slack 설정 주의**
+- Webhook URL이 올바른지 확인  
+- Lambda 환경 변수에 정확히 등록  
+- Slack 앱에 `Incoming Webhooks` 권한 필요  
+
+---
+
+###  CloudWatch 로그 확인
+
+- **로그 그룹명:** `/aws/lambda/get_visitlogapi`  
+- 각 실행 결과의 상세 로그 및 Slack 응답 메시지 확인 가능  
+- `"DEBUG"` 로그를 통해 API 페이지별 수집 상태 추적 가능  
+
+---
+
+## 💡 시스템 장점
 1. **완전 서버리스 구조**  
    서버 관리 없이 운영 가능, 사용량 기반 과금  
 2. **스마트 스케줄링**  
-   평일/주말/공휴일 구분 실행 + 부하 조절  
+   평일/주말/공휴일 구분 실행 + 부하 제어  
 3. **실시간 모니터링**  
    Slack으로 즉각적인 알림 수신  
 4. **안정적인 데이터 관리**  
-   S3 파티셔닝 구조로 분석 효율성 확보  
+   S3 파티셔닝 구조로 효율적 접근  
 5. **확장성 높은 설계**  
-   다른 API 또는 소스 추가 시 손쉬운 확장 가능  
+   다른 API 또는 데이터 소스 추가 용이  
 
 ---
 
 ## 📊 예상 비용 (월 기준)
-| 항목 | 예상비용(USD) |
-|------|----------------|
+| 항목 | 비용(USD) |
+|------|------------|
 | AWS Lambda | 0.10 |
-| S3 스토리지 | 0.01 |
+| Amazon S3 | 0.01 |
 | EventBridge | 0.01 |
 | CloudWatch Logs | 0.05 |
 | **총합** | **약 $0.20 (≈ 270원)** |
 
 ---
 
-##  결론
-- ✅ 서버 관리 없는 자동화 파이프라인 구축  
-- ✅ 실시간 Slack 모니터링으로 신속한 대응  
-- ✅ 일자별 S3 저장 구조로 데이터 신뢰성 확보  
-- ✅ 낮은 운영 비용 대비 높은 확장성 확보  
+## 🎯 결론
+✅ 서버 관리 없는 자동화 파이프라인 구축  
+✅ 실시간 Slack 모니터링으로 즉각적인 대응  
+✅ 일자별 S3 저장 구조로 데이터 신뢰성 확보  
+✅ 낮은 운영 비용 대비 높은 확장성 확보  
 
-이 프로젝트는 **AWS 서버리스 생태계 기반 데이터 자동화의 모범 사례**로,  
-향후 다양한 데이터 수집 및 분석 파이프라인에 적용할 수 있습니다.
+이 시스템은 AWS 서버리스 생태계를 활용한  
+**데이터 자동화 파이프라인의 대표적인 구축 사례**입니다.
 
 ---
 
@@ -114,4 +219,4 @@ def lambda_handler(event, context):
 
 ---
 
-**태그:** `#AWS` `#Lambda` `#Serverless` `#S3` `#EventBridge` `#Slack` `#DataPipeline` `#Automation`
+**태그:** `#AWS` `#Lambda` `#Serverless` `#S3` `#EventBridge` `#Slack` `#Automation` `#DataPipeline`
